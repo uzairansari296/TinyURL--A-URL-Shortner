@@ -9,34 +9,48 @@ const app = express();
 const port = process.env.PORT || 4000;
 env.config();
 
-// Validate environment variables
-const requiredEnvVars = ['PG_USER', 'PG_HOST', 'PG_DATABASE', 'PG_PASSWORD', 'PG_PORT'];
-const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+// Try DATABASE_URL first, fall back to individual env vars
+let db;
 
-if (missingVars.length > 0) {
-    console.error('❌ Missing required environment variables:', missingVars);
-    console.error('Please set these in your Render dashboard Environment section.');
-    process.exit(1);
-}
+if (process.env.DATABASE_URL) {
+    console.log('✅ Using DATABASE_URL connection string');
+    db = new pg.Client({
+        connectionString: process.env.DATABASE_URL,
+        ssl: {
+            rejectUnauthorized: false
+        }
+    });
+} else {
+    // Validate environment variables
+    const requiredEnvVars = ['PG_USER', 'PG_HOST', 'PG_DATABASE', 'PG_PASSWORD', 'PG_PORT'];
+    const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
-console.log('✅ Database config:', {
-    user: process.env.PG_USER,
-    host: process.env.PG_HOST,
-    database: process.env.PG_DATABASE,
-    port: process.env.PG_PORT,
-    // Don't log password for security
-});
-
-const db = new pg.Client({
-    user: process.env.PG_USER,
-    host: process.env.PG_HOST,
-    database: process.env.PG_DATABASE,
-    password: process.env.PG_PASSWORD,
-    port: process.env.PG_PORT,
-    ssl: {
-        rejectUnauthorized: false
+    if (missingVars.length > 0) {
+        console.error('❌ Missing required environment variables:', missingVars);
+        console.error('Please set DATABASE_URL or these variables in your Render dashboard:', requiredEnvVars);
+        process.exit(1);
     }
-});
+
+    console.log('✅ Using individual environment variables');
+    console.log('Database config:', {
+        user: process.env.PG_USER,
+        host: process.env.PG_HOST,
+        database: process.env.PG_DATABASE,
+        port: process.env.PG_PORT,
+        // Don't log password for security
+    });
+
+    db = new pg.Client({
+        user: process.env.PG_USER,
+        host: process.env.PG_HOST,
+        database: process.env.PG_DATABASE,
+        password: process.env.PG_PASSWORD,
+        port: process.env.PG_PORT,
+        ssl: {
+            rejectUnauthorized: false
+        }
+    });
+}
 
 // Connect with error handling
 try {
