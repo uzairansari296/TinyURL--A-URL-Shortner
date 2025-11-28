@@ -1,0 +1,25 @@
+version: "1"
+services:
+  - type: web
+    name: tinylink-url-shortener
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        generateValue: true
+      # Add your database environment variables here
+      # - key: PG_USER
+      #   value: your_db_user
+      # - key: PG_HOST
+      #   value: your_db_host
+      # - key: PG_DATABASE
+      #   value: your_db_name
+      # - key: PG_PASSWORD
+      #   value: your_db_password
+      # - key: PG_PORT
+      #   value: 5432
+    autoDeploy: false

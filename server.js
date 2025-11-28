@@ -2,10 +2,13 @@ import express from "express";
 import methodOverride from "method-override";
 import bodyParser from "body-parser";
 import axios from "axios";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3000;
-const API_URL = "http://localhost:4000"; 
+const API_URL = process.env.API_URL || "http://localhost:4000"; 
 
 app.use(express.static("public"));
 

@@ -1,11 +1,12 @@
 import express from "express";
+import methodOverride from "method-override";
 import bodyParser from "body-parser";
 import axios from "axios";
 import pg from "pg";
 import env from "dotenv";
 
 const app = express();
-const port = 4000;
+const port = process.env.PORT || 4000;
 env.config();
 
 const db = new pg.Client({
@@ -18,8 +19,14 @@ const db = new pg.Client({
 
 db.connect();
 
+// Frontend middleware
+app.use(express.static("public"));
+app.set('view engine', 'ejs');
+
+// API middleware
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(methodOverride('_method'));
 
 const generateShortCode = (length = 7) => {
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -30,6 +37,108 @@ const generateShortCode = (length = 7) => {
     return code;
 }
 
+// Frontend Routes
+app.get("/", async (req, res) => {
+    try {
+        const result = await db.query("SELECT short_code, target_url, total_clicks, last_clicked_at, created_at FROM links ORDER BY created_at DESC");
+        const baseUrl = process.env.NODE_ENV === 'production' ? `https://${req.get('host')}` : `http://localhost:${port}`;
+        res.render("index.ejs", {BASE_URL: baseUrl, links: result.rows});
+    } catch (error) {
+        console.error("Error fetching links for dashboard:", error.message);
+        const baseUrl = process.env.NODE_ENV === 'production' ? `https://${req.get('host')}` : `http://localhost:${port}`;
+        res.render("index.ejs", {BASE_URL: baseUrl, links: [], error: "Failed to load links."});
+    }
+});
+
+app.get("/add", (req, res) => {
+    res.render("modify.ejs");
+});
+
+app.get("/search", async (req, res) => {
+    const searchTerm = req.query.search;
+    try {
+        let queryText = "SELECT short_code, target_url, total_clicks, last_clicked_at, created_at FROM links";
+        let queryParams = [];
+        
+        if (searchTerm) {
+            queryText += " WHERE short_code ILIKE $1";
+            queryParams.push(`%${searchTerm}%`);
+        }
+        
+        queryText += " ORDER BY created_at DESC";
+        const result = await db.query(queryText, queryParams);
+        const baseUrl = process.env.NODE_ENV === 'production' ? `https://${req.get('host')}` : `http://localhost:${port}`;
+        
+        res.render("index.ejs", {
+            BASE_URL: baseUrl,
+            links: result.rows,
+            searchTerm: searchTerm
+        });
+    } catch (error) {
+        console.error("Error during search:", error.message);
+        const baseUrl = process.env.NODE_ENV === 'production' ? `https://${req.get('host')}` : `http://localhost:${port}`;
+        res.render("index.ejs", {
+            BASE_URL: baseUrl,
+            links: [],
+            searchTerm: searchTerm,
+            error: "Failed to perform search."
+        });
+    }
+});
+
+app.get("/code/:code", async (req, res) => {
+    const { code } = req.params;
+    try {
+        const queryText = `
+            SELECT short_code, target_url, total_clicks, last_clicked_at, created_at
+            FROM links
+            WHERE short_code = $1;
+        `;
+        const result = await db.query(queryText, [code]);
+        
+        if (result.rowCount === 0) {
+            return res.status(404).send(`Stats for short code "${code}" not found.`);
+        }
+        
+        const baseUrl = process.env.NODE_ENV === 'production' ? `https://${req.get('host')}` : `http://localhost:${port}`;
+        res.render("stats.ejs", { link: result.rows[0], BASE_URL: baseUrl });
+    } catch (err) {
+        console.error("Error fetching stats:", err.message);
+        res.status(500).send("Failed to retrieve link statistics.");
+    }
+});
+
+// Public redirect route (must be before API routes to avoid conflicts)
+app.get("/:code", async (req, res) => {
+    const { code } = req.params;
+    
+    // Skip if it's an API route or static file
+    if (code.startsWith('api') || code.includes('.')) {
+        return res.status(404).send("Not found");
+    }
+    
+    try {
+        const queryText = `
+            UPDATE links
+            SET total_clicks = total_clicks + 1,
+                last_clicked_at = NOW()
+            WHERE short_code = $1
+            RETURNING target_url;
+        `;
+        const result = await db.query(queryText, [code]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).send("TinyLink not found.");
+        }
+
+        return res.redirect(302, result.rows[0].target_url);
+    } catch (err) {
+        console.error("Error during public redirect:", err.message);
+        return res.status(500).send("Server error during redirection.");
+    }
+});
+
+// API Routes
 app.get("/api/links", async(req, res) => {
     const searchTerm = req.query.query; 
 
@@ -52,6 +161,55 @@ app.get("/api/links", async(req, res) => {
     }
 });
 
+// Frontend form handling
+app.post("/api/links", async (req, res) => {
+    try {
+        const { longURL: targetUrl, code: customCode } = req.body;
+        let code = customCode;
+
+        if (!code) {
+            code = generateShortCode(); 
+        }
+        
+        if (code && !/^[A-Za-z0-9]{6,8}$/.test(code)) {
+            return res.status(500).render("modify.ejs", { error: "Short code must be 6-8 alphanumeric characters." });
+        }
+
+        const queryText = `
+            INSERT INTO links (short_code, target_url)
+            VALUES ($1, $2)
+            RETURNING short_code, target_url, total_clicks, created_at;
+        `;
+        await db.query(queryText, [code, targetUrl]);
+        res.redirect("/");
+    } catch (err) {
+        console.error("Error creating short URL:", err.message);
+        res.status(500).render("modify.ejs", { error: "Error creating shortenURL or code already exists." });
+    }
+});
+
+app.delete("/api/links/:code", async(req, res) => {
+    const { code } = req.params; 
+    try{
+        const queryText = `
+            DELETE FROM links
+            WHERE short_code = $1
+            RETURNING short_code;
+        `;
+        const result = await db.query(queryText, [code]);
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: `Link with code '${code}' not found.` });
+        }
+        
+        res.redirect("/");
+    } catch (err) {
+        console.error("Error deleting link:", err.message);
+        res.redirect("/?error=DeletionFailed");
+    }
+});
+
+// API Routes for JSON responses
 app.post("/links", async (req, res) => {
     const { longURL: targetUrl, code: customCode } = req.body;
     let code = customCode;
