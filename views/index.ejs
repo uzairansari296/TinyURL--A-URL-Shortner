@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>URL Shortner</title>
+  <link rel="stylesheet" href="/styles/main.css">
+</head>
+
+<body>
+  <div class="container">
+    <h1>TinyLink</h1>
+     <div class="controls-bar">
+      <a id="newPostBtn" href="/add">Add New Link</a>
+      <div class="search-group">
+    <form action="/search" method="GET"> 
+    <input 
+        type="text" 
+        name="search" 
+        id="searchInput" 
+        placeholder="Search by short code..."
+        value="<%= typeof searchTerm !== 'undefined' ? searchTerm : '' %>" 
+    />
+    <button id="searchButton" type="submit" class="edit">Search</button>
+    </form>
+</div>
+    </div>
+     <table>
+            <thead>
+                <tr>
+                    <th>Short Code</th>
+                    <th>Target URL</th>
+                    <th>Total Clicks</th>
+                    <th>Last Clicked</th>
+                    <th class="action-column">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% if (links && links.length > 0) { %>
+                    <% links.forEach(link => { %>
+                        <tr>
+                            <td>
+                                <a href="/code/<%= link.short_code %>">
+                                    <%= link.short_code %>
+                                </a>
+                            </td>
+
+                            <td class="target-url-cell"><%= link.target_url %></td>
+
+                            <td><%= link.total_clicks %></td>
+
+                            <td>
+                                <%= link.last_clicked_at ? new Date(link.last_clicked_at).toLocaleString() : 'Never' %>
+                            </td>
+
+                            <td>
+                                <form method="POST" action="/api/links/<%= link.short_code %>?_method=DELETE" style="display:inline;">
+                                    <button type="submit" class="delete-btn">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                    <% }); %>
+                <% } else { %>
+                    <tr>
+                        <td colspan="5" class="empty-state">No links found. Click "Add New Link" to get started!</td>
+                    </tr>
+                <% } %>
+            </tbody>
+        </table>
+  </div>
+</body>
+
+</html>

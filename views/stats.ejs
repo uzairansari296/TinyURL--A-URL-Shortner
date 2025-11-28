@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TinyLink Stats: <%= link.short_code %></title>
+    <link rel="stylesheet" href="/styles/main.css">
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Link Statistics for: <%= link.short_code %></h1>
+        
+        <div class="stats-detail">
+            <p><strong>Target URL:</strong> <a href="<%= link.target_url %>" target="_blank"><%= link.target_url %></a></p>
+            
+            <p><strong>Short Link:</strong> <a href="<%= BASE_URL %>/<%= link.short_code %>"><%= BASE_URL %>/<%= link.short_code %></a></p>
+        </div>
+        
+        <hr>
+        
+        <h2>Key Metrics</h2>
+        <ul>
+            <li><strong>Total Clicks:</strong> **<%= link.total_clicks %>**</li>
+            <li><strong>Created On:</strong> <%= new Date(link.created_at).toLocaleString() %></li>
+            <li>
+                <strong>Last Clicked:</strong> 
+                <%= link.last_clicked_at ? new Date(link.last_clicked_at).toLocaleString() : 'Never' %>
+            </li>
+        </ul>
+        
+        <a href="/" class="back-link">← Back to Dashboard</a>
+    </div>
+</body>
+</html>
