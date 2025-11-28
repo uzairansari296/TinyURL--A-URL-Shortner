@@ -9,15 +9,43 @@ const app = express();
 const port = process.env.PORT || 4000;
 env.config();
 
+// Validate environment variables
+const requiredEnvVars = ['PG_USER', 'PG_HOST', 'PG_DATABASE', 'PG_PASSWORD', 'PG_PORT'];
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingVars.length > 0) {
+    console.error('❌ Missing required environment variables:', missingVars);
+    console.error('Please set these in your Render dashboard Environment section.');
+    process.exit(1);
+}
+
+console.log('✅ Database config:', {
+    user: process.env.PG_USER,
+    host: process.env.PG_HOST,
+    database: process.env.PG_DATABASE,
+    port: process.env.PG_PORT,
+    // Don't log password for security
+});
+
 const db = new pg.Client({
     user: process.env.PG_USER,
     host: process.env.PG_HOST,
     database: process.env.PG_DATABASE,
     password: process.env.PG_PASSWORD,
     port: process.env.PG_PORT,
+    ssl: {
+        rejectUnauthorized: false
+    }
 });
 
-db.connect();
+// Connect with error handling
+try {
+    await db.connect();
+    console.log('✅ Connected to database successfully');
+} catch (err) {
+    console.error('❌ Database connection failed:', err);
+    process.exit(1);
+}
 
 // Frontend middleware
 app.use(express.static("public"));
